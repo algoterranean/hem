@@ -1,8 +1,11 @@
+import tensorflow as tf
+import numpy as np
 import argparse
 import uuid
 import multiprocessing
 import random
 import os
+import sys
 
 import hem
 
@@ -167,9 +170,10 @@ def parse_args(display=False):
 
     # set seed (useful for debugging purposes)
     if args.seed is None:
-        args.seed = os.urandom(4)
+        args.seed = np.random.randint(sys.maxsize)
+        # args.seed = os.urandom(4)
     random.seed(args.seed)
-
+    tf.set_random_seed(args.seed)
 
     if display:
         for a in vars(args):
