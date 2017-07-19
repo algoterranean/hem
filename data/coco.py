@@ -8,8 +8,6 @@ import urllib
 
 import hem
 
-# from hem.data.DataPlugin import *
-
 _features = {
     'image': tf.FixedLenFeature([], tf.string),
     # all masks combined into one image
@@ -141,8 +139,8 @@ class COCODataset(hem.DataPlugin):
             # TODO resize should be a parameter, not hard-coded
             parsed = tf.parse_single_example(example_proto, _features)
             image = tf.image.decode_image(parsed['image'], channels=3)
-            w = parsed['width']
-            h = parsed['height']
+            w = tf.cast(parsed['width'], tf.int32)
+            h = tf.cast(parsed['height'], tf.int32)
             image = tf.reshape(image, [h, w, 3])
             image = tf.image.resize_images(image, [64, 64])
             image = tf.cast(image, tf.float32) / 255.0
@@ -158,22 +156,29 @@ class COCODataset(hem.DataPlugin):
         train_set = TFRecordDataset(os.path.join(args.dataset_dir, _output_files[0]))
         validate_set = TFRecordDataset(os.path.join(args.dataset_dir, _output_files[1]))
         test_set = TFRecordDataset(os.path.join(args.dataset_dir, _output_files[2]))
-        train_set = train_set.map(COCODataset.parse_tfrecord(args))
-        validate_set = validate_set.map(COCODataset.parse_tfrecord(args))
-        test_set = test_set.map(COCODataset.parse_tfrecord(args))
-        return {'train': train_set,  'validate': validate_set, 'test': test_set}
+        train_set = train_set.map(COCODataset.parse_tfrecord(args), num_threads=args.n_threads)
+        validate_set = validate_set.map(COCODataset.parse_tfrecord(args), num_threads=args.n_threads)
+        test_set = test_set.map(COCODataset.parse_tfrecord(args), num_threads=args.n_threads)
+        return {'train': (train_set, os.path.join(args.dataset_dir, 'coco.train.tfrecords')),
+                'validate': (validate_set, os.path.join(args.dataset_dir, 'coco.validate.tfrecords')),
+                'test': (test_set, os.path.join(args.dataset_dir, 'coco.test.tfrecords'))}
 
 
 if __name__ == '__main__':
+    import argparse
     # TODO need to test out datasets fully, including downloading AND unzipping AND generating splits
+    # TODO download datasets if not available
     # ensure that the dataset exists
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--out_dir', type=str, required=True)
+    parser.add_argument('--in_dir', type=str, required=True)
+    args = parser.parse_args()
+
     p = COCODataset()
-    tfrecord_dir = '/mnt/research/projects/autoencoders/data/storage'
-    raw_dir = '/mnt/research/datasets/coco'
-    if not p.check_prepared_datasets(tfrecord_dir):
-        if not p.check_raw_datasets(raw_dir):
+    if not p.check_prepared_datasets(args.out_dir):
+        if not p.check_raw_datasets(args.in_dir):
             print('Downloading dataset...')
             # TODO: datasets should be able to be marked as non-downloadable
-            p.download(raw_dir)
+            p.download(args.in_dir)
         print('Converting to tfrecord...')
-        p.convert_to_tfrecord(raw_dir, tfrecord_dir)
+        p.convert_to_tfrecord(args.in_dir, args.out_dir)
